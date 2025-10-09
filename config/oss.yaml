@@ -1,0 +1,16 @@
+# gpu info
+model_path: /home/Chushi.Chen@amd.com/dev/models/models--openai--gpt-oss-120b/snapshots/4c0fa49a43c232dc2a1cae033ae1fb7961cf8220
+gpu_index: [0,1,2,3,4,5,6,7]
+batch_size: 2000
+gpu: 0.95
+tp: 1
+  
+# task mode in (infer, judge, vote, judge_vote)
+mode: infer
+
+# data
+base_data_path: 'datas/example'
+data_info_name: 'info.jsonl'
+num_answer: 32
+reasoning_level: medium
+max_tokens: 30000
