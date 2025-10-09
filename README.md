@@ -1,6 +1,6 @@
 # ReasonLite
 
-## Start Vllm Server
+## Start vllm Server
 
 ```
 python3 vllm_start.py -c config/oss.yaml
