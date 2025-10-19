@@ -17,12 +17,27 @@ import threading
 import queue
 import jsonlines
 import re
+from enum import Enum
 from utils.tools import get_last_boxed, get_vote_result, until_servers_up
 from utils.prompt_func import infer_prompt, vote_prompt, judge_prompt
 
+class Mode(str, Enum):
+    """Enumeration for different reasoning modes."""
+    INFER = 'infer'
+    JUDGE = 'judge'
+    JUDGE_VOTE = 'judge_vote'
+    VOTE = 'vote'
+    
+    @classmethod
+    def from_str(cls, mode_str: str):
+        for mode in cls:
+            if mode.value == mode_str:
+                return mode
+        raise ValueError(f"Unknown ReasonMode: {mode_str}")
+
 
 class vllm_infer():
-    def __init__(self, config_path='/llm_training/zihao/2024/inference/vllm_infer/config/base.yaml', chat=True, save_path=None, postprocess=None):
+    def __init__(self, config_path, save_path, chat=True, postprocess=None):
         if chat:
             self.base_url = "http://{localhost}:{port}/v1/chat/completions"
         else:
@@ -63,8 +78,7 @@ class vllm_infer():
             threads.append(t)
             tmp.append(self.urls[_])
         out = []
-        if self.save_path is not None:
-            writer = jsonlines.open(self.save_path, mode='a')
+        writer = jsonlines.open(self.save_path, mode='a')
         to_write = []
         for i in tqdm.tqdm(range(len(datas))):
             tmp_out = output_queue.get()
@@ -128,12 +142,12 @@ class vllm_infer():
                 pass
     
 
-def get_prompt_data(config, mode, num_answer):
+def get_prompt_data(config: dict, mode: Mode, num_answer: int):
     base_data_path = config['base_data_path']
-    if mode == 'infer':
+    if mode == Mode.INFER:
         prompt_json_paths = [os.path.join(base_data_path, config.get('data_info_name', 'info.jsonl'))]
     else:
-        prompt_path = os.path.join(base_data_path, data_name_dict['infer'])
+        prompt_path = os.path.join(base_data_path, data_name_dict[Mode.INFER])
         prompt_path = sorted(glob.glob(os.path.join(prompt_path, '*')))[-1]
         prompt_json_paths = glob.glob(os.path.join(prompt_path, '*.jsonl'))
     logger.info(f'[load data from]: {prompt_json_paths}')
@@ -142,7 +156,7 @@ def get_prompt_data(config, mode, num_answer):
     for prompt_json_paths_tmp in prompt_json_paths:
         base_ds_ori.extend([json.loads(i) for i in open(prompt_json_paths_tmp).readlines()])
 
-    if mode == 'infer':
+    if mode == Mode.INFER:
         base_ds = []
         for c, i in enumerate(base_ds_ori):
             i['index'] = str(i.get('index', c))
@@ -153,7 +167,7 @@ def get_prompt_data(config, mode, num_answer):
                     tmp = deepcopy(i)
                     tmp['index'] = f"{tmp['index']}_{j}"
                     base_ds.append(tmp)
-    elif mode == 'vote':
+    elif mode == Mode.VOTE:
         data_by_id = {}
         for i in tqdm.tqdm(base_ds_ori):
             index = i['index']
@@ -180,8 +194,8 @@ def get_prompt_data(config, mode, num_answer):
                 'info': tmp_data[0]['info'],
                 })
         base_ds = check_answer
-    elif mode == 'judge_vote':
-        vote_info_path = sorted(glob.glob(os.path.join(base_data_path, data_name_dict['vote'], '*', '*.jsonl')))[-1]
+    elif mode == Mode.JUDGE_VOTE:
+        vote_info_path = sorted(glob.glob(os.path.join(base_data_path, data_name_dict[Mode.JUDGE_VOTE], '*', '*.jsonl')))[-1]
         vote_info = [json.loads(i) for i in open(vote_info_path).readlines()]
         vote_info_dict = {i['index']: i for i in vote_info}
         base_ds = []
@@ -193,11 +207,11 @@ def get_prompt_data(config, mode, num_answer):
     return base_ds
 
 data_name_dict = {
-    'infer': 'answer_origin',
-    'judge': 'answer_judge',
-    'judge_vote': 'answer_judge_vote',
-    'vote': 'vote',
-    }
+    Mode.INFER: 'answer_origin',
+    Mode.JUDGE: 'answer_judge',
+    Mode.JUDGE_VOTE: 'answer_judge_vote',
+    Mode.VOTE: 'vote',
+}
 
 def get_latest_date(config, new_data_name, save_file):
     latest_paths = sorted([i for i in glob.glob(os.path.join(config['base_data_path'], new_data_name, '*')) if str(save_file) not in i])
@@ -211,63 +225,69 @@ def get_latest_date(config, new_data_name, save_file):
     return latest_ds
 
 
-def postprecess_func_vote(data):
-    new_data = {**data['data_extra']['info']}
-    new_data['vote'] = get_vote_result(data['answer'])
-    return new_data
+class PostProcessor:
+    """Postprocess handlers."""
 
-def postprecess_func_judge(data):
-    new_data = {**data['data_extra']}
-    try:
-        tmp = data['answer'].split('final<|message|>')[-1]
-        if 'true' in tmp:
-            judge_result = True
-        else:
-            judge_result = False
-    except:
-        judge_result = None
-    new_data['judge'] = judge_result
-    return new_data
+    def process_vote(self, data):
+        new_data = {**data['data_extra']['info']}
+        new_data['vote'] = get_vote_result(data['answer'])
+        return new_data
 
-def postprecess_func_infer(data):
-    try:
-        new_data = {
-            'info': data['data_extra'],
-            'index': data['data_extra']['index'],
-            'model_input': data['prompt'],
-            'model_output': data['output']['choices'][0]['text'],
-            'prompt': data['data_extra']['prompt'],
-            'answer':  data['output']['choices'][0]['text'][len(data['prompt']):],
-        }
-    except:
-        new_data = {
-            'info': data['data_extra'],
-            'index': data['data_extra']['index'],
-            'model_output': None,
-            'model_input': data['prompt'],
-            'prompt': data['data_extra']['prompt'],
-            'answer':  None,
-        }
-    return new_data
+    def process_judge(self, data):
+        new_data = {**data['data_extra']}
+        try:
+            tmp = data['answer'].split('final<|message|>')[-1]
+            if 'true' in tmp:
+                judge_result = True
+            else:
+                judge_result = False
+        except:
+            judge_result = None
+        new_data['judge'] = judge_result
+        return new_data
 
-def get_vllm_data_postprocess_func(config, mode):
-    if mode == 'infer':
-        return postprecess_func_infer
-    if mode in ['judge', 'judge_vote']:
-        return postprecess_func_judge
-    if mode == 'vote':
-        return postprecess_func_vote
+    def process_infer(self, data):
+        try:
+            new_data = {
+                'info': data['data_extra'],
+                'index': data['data_extra']['index'],
+                'model_input': data['prompt'],
+                'model_output': data['output']['choices'][0]['text'],
+                'prompt': data['data_extra']['prompt'],
+                'answer':  data['output']['choices'][0]['text'][len(data['prompt']):],
+            }
+        except:
+            new_data = {
+                'info': data['data_extra'],
+                'index': data['data_extra']['index'],
+                'model_output': None,
+                'model_input': data['prompt'],
+                'prompt': data['data_extra']['prompt'],
+                'answer':  None,
+            }
+        return new_data
+
+def get_vllm_data_postprocess_func(config: dict, mode: Mode):
+    processor = PostProcessor()
+    if mode == Mode.INFER:
+        return processor.process_infer
+    if mode in [Mode.JUDGE, Mode.JUDGE_VOTE]:
+        return processor.process_judge
+    if mode == Mode.VOTE:
+        return processor.process_vote
     return None
 
 def vllm_data_preprocess(config, data, mode):
-        if mode == 'infer':
+        if mode == Mode.INFER:
             prompt = infer_prompt(data)
-        elif mode == 'judge':
+        elif mode == Mode.JUDGE:
             prompt = judge_prompt(data)
-        elif mode == 'judge_vote':
+        elif mode == Mode.JUDGE_VOTE:
             prompt = judge_prompt(data, vote=True)
-        elif mode == 'vote':
+        elif mode == Mode.VOTE:
             prompt = vote_prompt(data)
+        else:
+            raise ValueError(f"Unknown mode: {mode}")
         reasoning_level = config.get('reasoning_level', 'medium') 
 
         text = f'''<|start|>system<|message|>You are ChatGPT, a large language model trained by OpenAI.
@@ -298,7 +318,7 @@ reasoning: {reasoning_level}
 
 @click.command()
 @click.option('-c', '--config-path', default='config/oss.yaml', help='Path to the configuration YAML file.')
-@click.option('-m', '--mode', default=None)
+@click.option('-m', '--mode', default=None, type=click.Choice([m.value for m in Mode], case_sensitive=False))
 @click.option('-l', '--local_rank', default=0)
 @click.option('-g', '--global_size', default=1)
 @click.option('-s', '--save_file', default=None)
@@ -312,23 +332,24 @@ def main(config_path, local_rank, global_size, save_file, mode):
     
     base_data_path = config['base_data_path']
     if mode is None:
-        mode = config.get('mode', 'infer')
+        mode = str(config.get('mode', Mode.INFER.value))
     else:
         config['mode'] = mode
+    mode_enum = Mode.from_str(mode.lower())
     num_answer = config.get('num_answer', 8)
     logger.info(config)
 
     ## save data path
     if save_file is None:
         save_file = datetime.now().strftime("%Y%m%d_%H%M%S")
-    new_data_name = config.get('new_data_name', data_name_dict[mode])
+    new_data_name = config.get('new_data_name', data_name_dict[mode_enum])
     save_path = os.path.join(base_data_path, new_data_name, save_file, f'{local_rank}_{global_size}.jsonl')
     os.makedirs(os.path.join(base_data_path, new_data_name, save_file), exist_ok=True)
     logger.info(f'[save data to]: {save_path}')
     
 
     ## load prompt data
-    base_ds = get_prompt_data(config, mode, num_answer)
+    base_ds = get_prompt_data(config, mode_enum, num_answer)
 
 
     ## get latest data
@@ -342,7 +363,7 @@ def main(config_path, local_rank, global_size, save_file, mode):
     finished = [] 
 
     count = 0
-    for c, data in tqdm.tqdm(enumerate(base_ds)):
+    for c, data in enumerate(tqdm.tqdm(base_ds)):
         key = data["index"]
         if key in finished_data_info and finished_data_info[key].get('answer', None) is not None:
             finished.append(finished_data_info[key])
@@ -360,7 +381,7 @@ def main(config_path, local_rank, global_size, save_file, mode):
 
 
     ## vllm infer & postprecess
-    postprocess = get_vllm_data_postprocess_func(config, mode)
+    postprocess = get_vllm_data_postprocess_func(config, mode_enum)
 
     f = vllm_infer(config_path, chat=False, save_path=save_path, postprocess=postprocess)
     out = f.get_answer(vllm_input_datas)
