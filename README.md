@@ -40,6 +40,6 @@ python3 infer.py -c config/oss.yaml -m judge_vote
 You will need to manually change the path of judged data
 
 ```
-python3 utils/saving_to_training_format.py
+python3 utils/saving_to_training_format.py -d path/to/judged/data.jsonl
 ```
 
