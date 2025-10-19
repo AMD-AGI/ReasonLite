@@ -195,7 +195,7 @@ def get_prompt_data(config: dict, mode: Mode, num_answer: int):
                 })
         base_ds = check_answer
     elif mode == Mode.JUDGE_VOTE:
-        vote_info_path = sorted(glob.glob(os.path.join(base_data_path, data_name_dict[Mode.JUDGE_VOTE], '*', '*.jsonl')))[-1]
+        vote_info_path = sorted(glob.glob(os.path.join(base_data_path, data_name_dict[Mode.VOTE], '*', '*.jsonl')))[-1]
         vote_info = [json.loads(i) for i in open(vote_info_path).readlines()]
         vote_info_dict = {i['index']: i for i in vote_info}
         base_ds = []
