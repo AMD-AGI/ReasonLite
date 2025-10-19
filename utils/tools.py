@@ -1,8 +1,48 @@
 import re
 import json
+import time
+import yaml
+import subprocess
+
+def until_servers_up(config):
+    base_url = "http://localhost:{port}/v1/models"
+    
+    # with open(config_path) as f:
+    #     config = yaml.safe_load(f)
+        
+    devices: list = config['gpu_index']
+    tp: int = config['tp']
+    
+    partitions = [devices[i:i+tp] for i in range(0, len(devices), tp)]
+    ports = [8040 + int(i[0]) for i in partitions]
+    
+    print(f"Waiting for servers on ports: {ports}")
+    t0 = time.perf_counter()
+    print_every = 60 * 1
+    last_print = t0
+    while True:
+        ready_ports = []
+        all_ready = True
+        for port in ports:
+            url = base_url.format(port=port)
+            result = subprocess.run(['curl', '-s', url], capture_output=True)
+            if result.returncode != 0:
+                all_ready = False
+                # print(f"Servers on port {port} not ready yet, dt: {(time.perf_counter() - t0)/60: .2f} min")
+                # break
+            else:
+                ready_ports.append(port)
+        if all_ready:
+            print(f"All servers are up, dt: {(time.perf_counter() - t0) / 60: .2f} min")
+            break
+        curr = time.perf_counter()
+        if curr - last_print > print_every:
+            print(f"Ready ports: {len(ready_ports)}/{len(ports)}, dt: {int((curr - t0) / 60)} min")
+            last_print = curr
+        time.sleep(1)
 
 def get_boxed_contents(text: str):
-    """~T~[~^~V~G~\__~I~@~\~I \boxed{...} ~Z~D~F~E__~H~T~L~A~L~W~J~K~O~N~M~L~I"""
+    r"""~T~[~^~V~G~\__~I~@~\~I \boxed{...} ~Z~D~F~E__~H~T~L~A~L~W~J~K~O~N~M~L~I"""
     boxes = []
     i = 0
     needle = r'\boxed{'
@@ -41,7 +81,7 @@ def get_boxed_contents(text: str):
     return boxes
 
 def get_last_boxed(text: str):
-    """~T~[~^~\~@~P~N~@__ \boxed{...} ~Z~D~F~E__~[~K~W| ~H~Y~T~[~^ None"""
+    r"""~T~[~^~\~@~P~N~@__ \boxed{...} ~Z~D~F~E__~[~K~W| ~H~Y~T~[~^ None"""
     try:
         boxes = get_boxed_contents(text)
         return boxes[-1] if boxes else 'none'

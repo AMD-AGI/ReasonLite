@@ -17,7 +17,7 @@ import threading
 import queue
 import jsonlines
 import re
-from utils.tools import get_last_boxed, get_vote_result
+from utils.tools import get_last_boxed, get_vote_result, until_servers_up
 from utils.prompt_func import infer_prompt, vote_prompt, judge_prompt
 
 
@@ -306,6 +306,10 @@ def main(config_path, local_rank, global_size, save_file, mode):
 
     ## update config
     config = yaml.safe_load(open(config_path))
+    
+    # wait until all servers are up
+    until_servers_up(config)
+    
     base_data_path = config['base_data_path']
     if mode is None:
         mode = config.get('mode', 'infer')
