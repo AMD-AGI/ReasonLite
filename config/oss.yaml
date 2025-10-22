@@ -9,8 +9,9 @@ tp: 1
 mode: infer
 
 # data
+wait_servers_up: true
 base_data_path: 'datas/example'
 data_info_name: 'info.jsonl'
-num_answer: 32
+num_answer: 16
 reasoning_level: medium
 max_tokens: 30000
