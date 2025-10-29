@@ -1,0 +1,11 @@
+
+gpu_index: [0,1,2,3,4,5,6,7]
+tp: 8
+timeout: 7200 # max time for each checkpoint, task will be killed after timeout
+test_base_path: # list of base paths to checkpoints for evaluation
+  - 'datas/oss/uni_eval'
+  - 'datas/oss/grade_school_math'
+
+# sampling parameters
+temperature: 0.6
+top_p: 0.95
