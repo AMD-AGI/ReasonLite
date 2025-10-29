@@ -1,11 +1,10 @@
 import os
 import glob
-import json 
+import json
 from enum import Enum
 from tqdm import tqdm
 from copy import deepcopy
 
-from utils.tools import get_last_boxed
 from utils.tools import get_last_boxed, get_vote_result
 from utils.prompt_func import infer_prompt, vote_prompt, judge_prompt
 from utils.logging_utils import logger
@@ -26,15 +25,8 @@ class Mode(str, Enum):
         raise ValueError(f"Unknown ReasonMode: {mode_str}")
     
     
-class ReasoningModeHandler:
-    """Unified handler for mode, preprocessing, postprocessing, and data IO."""
-
-    data_name_map = {
-        Mode.INFER: 'answer_origin',
-        Mode.JUDGE: 'answer_judge',
-        Mode.JUDGE_VOTE: 'answer_judge_vote',
-        Mode.VOTE: 'vote',
-    }
+class BaseReasoningModeHandler:
+    """Base handler defining common IO and request-building utilities."""
 
     def __init__(self, config: dict, mode: Mode):
         self.config = config
@@ -43,72 +35,26 @@ class ReasoningModeHandler:
 
     @property
     def data_name(self) -> str:
-        return self.data_name_map[self.mode]
+        raise NotImplementedError
 
-    # ------------- Data loading helpers -------------
+    # helper functions
+    def _latest_origin_jsonls(self):
+        """Return list of jsonl paths from the latest 'answer_origin' folder."""
+        origin_root = os.path.join(self.base_data_path, 'answer_origin')
+        latest_origin_dir = sorted(glob.glob(os.path.join(origin_root, '*')))
+        if not latest_origin_dir:
+            return []
+        return glob.glob(os.path.join(latest_origin_dir[-1], '*.jsonl'))
+
+    def _read_jsonl_many(self, paths):
+        out = []
+        for p in paths:
+            out.extend([json.loads(i) for i in open(p).readlines()])
+        return out
+
+    # data loading
     def get_prompt_data(self, num_answer: int):
-        base_data_path = self.base_data_path
-        if self.mode == Mode.INFER:
-            prompt_json_paths = [os.path.join(base_data_path, self.config.get('data_info_name', 'info.jsonl'))]
-        else:
-            prompt_path = os.path.join(base_data_path, self.data_name_map[Mode.INFER])
-            prompt_path = sorted(glob.glob(os.path.join(prompt_path, '*')))[-1]
-            prompt_json_paths = glob.glob(os.path.join(prompt_path, '*.jsonl'))
-        logger.info(f'[load data from]: {prompt_json_paths}')
-
-        base_ds_ori = []
-        for prompt_json_paths_tmp in prompt_json_paths:
-            base_ds_ori.extend([json.loads(i) for i in open(prompt_json_paths_tmp).readlines()])
-
-        if self.mode == Mode.INFER:
-            base_ds = []
-            for c, i in enumerate(base_ds_ori):
-                i['index'] = str(i.get('index', c))
-                if len(i['index'].split('_')) == 2:
-                    base_ds.append(i)
-                else:
-                    for j in range(num_answer):
-                        tmp = deepcopy(i)
-                        tmp['index'] = f"{tmp['index']}_{j}"
-                        base_ds.append(tmp)
-        elif self.mode == Mode.VOTE:
-            data_by_id = {}
-            for i in tqdm(base_ds_ori):
-                index = i['index']
-                prompt_index = index.split('_')[0]
-                i['info']['index'] = str(prompt_index)
-                gt = i['info']['expected_answer']
-                answer = get_last_boxed(i['model_output'])
-                if prompt_index not in data_by_id:
-                    data_by_id[prompt_index] = []
-                tmp_data = {
-                    'gt': gt,
-                    'answer': answer,
-                    'info': i['info'],
-                }
-                data_by_id[prompt_index].append(tmp_data)
-            check_answer = []
-            for c, index in enumerate(data_by_id):
-                tmp_data = data_by_id[index]
-                answer = [i['answer'] for i in tmp_data]
-                check_answer.append({
-                    'index': index,
-                    'answer': answer,
-                    'gt': tmp_data[0]['gt'],
-                    'info': tmp_data[0]['info'],
-                })
-            base_ds = check_answer
-        elif self.mode == Mode.JUDGE_VOTE:
-            vote_info_path = sorted(glob.glob(os.path.join(base_data_path, self.data_name_map[Mode.VOTE], '*', '*.jsonl')))[-1]
-            vote_info = [json.loads(i) for i in open(vote_info_path).readlines()]
-            vote_info_dict = {i['index']: i for i in vote_info}
-            base_ds = []
-            for data in base_ds_ori:
-                data['info'] = vote_info_dict[data['index'].split('_')[0]]
-                base_ds.append(data)
-        else:
-            base_ds = base_ds_ori
-        return base_ds
+        raise NotImplementedError
 
     def get_latest_data(self, save_file: str):
         new_data_name = self.data_name
@@ -116,31 +62,17 @@ class ReasoningModeHandler:
             i for i in glob.glob(os.path.join(self.base_data_path, new_data_name, '*'))
             if str(save_file) not in i
         ])
-        if len(latest_paths) == 0:
-            latest_jsons = []
-        else:
-            latest_jsons = glob.glob(os.path.join(latest_paths[-1], '*'))
+        latest_jsons = glob.glob(os.path.join(latest_paths[-1], '*')) if latest_paths else []
         latest_ds = []
         for tmp_path in latest_jsons:
             latest_ds.extend([json.loads(i) for i in open(tmp_path).readlines()])
         return latest_ds
 
-    # ------------- Pre/Post-process -------------
-    def preprocess(self, data: dict) -> dict:
-        mode = self.mode
-        if mode == Mode.INFER:
-            prompt = infer_prompt(data)
-        elif mode == Mode.JUDGE:
-            prompt = judge_prompt(data)
-        elif mode == Mode.JUDGE_VOTE:
-            prompt = judge_prompt(data, vote=True)
-        elif mode == Mode.VOTE:
-            prompt = vote_prompt(data)
-        else:
-            raise ValueError(f"Unknown mode: {mode}")
-
+    # build request
+    def _wrap_prompt(self, prompt: str) -> str:
         reasoning_level = self.config.get('reasoning_level', 'medium')
-        text = f'''<|start|>system<|message|>You are ChatGPT, a large language model trained by OpenAI.
+        return (
+            f"""<|start|>system<|message|>You are ChatGPT, a large language model trained by OpenAI.
 Knowledge cutoff: 2024-06
 Current date: 2025-08-12
 
@@ -148,45 +80,65 @@ reasoning: {reasoning_level}
 
 # Valid channels: analysis, commentary, final. Channel must be included for every message.<|end|><|start|>developer<|message|><|end|><|start|>user<|message|>
 {prompt}
-<|end|><|start|>assistant'''
+<|end|><|start|>assistant"""
+        )
 
+    def preprocess(self, data: dict, temperature: float, top_p: float) -> dict:
+        """Subclass should prepare the user-visible prompt. This wraps and builds vLLM input."""
+        user_prompt = self._build_user_prompt(data)
+        text = self._wrap_prompt(user_prompt)
         vllm_data = {
-            "prompt": text,
-            "echo": True,
-            "seed": (lambda s: int(s) if s.isdigit() else 0)(data['index'].split('_')[-1]),
-            "n": 1,
-            "stream": False,
-            "temperature": 0.8,
-            "skip_special_tokens": False,
+            'prompt': text,
+            'echo': True,
+            'seed': (lambda s: int(s) if s.isdigit() else 0)(data['index'].split('_')[-1]),
+            'n': 1,
+            'stream': False,
+            'temperature': temperature,
+            'top_p': top_p,
+            'skip_special_tokens': False,
             'stop': ['<|endoftext|>', '<|return|>'],
-            "max_tokens": self.config.get('max_tokens', 32000),
+            'max_tokens': self.config.get('max_tokens', 32000),
             'index': data['index'],
             'data_extra': data,
         }
         return vllm_data
 
+    def _build_user_prompt(self, data: dict) -> str:
+        raise NotImplementedError
+
     @property
     def postprocess(self):
-        mode = self.mode
+        raise NotImplementedError
 
-        def process_vote(data):
-            new_data = {**data['data_extra']['info']}
-            new_data['vote'] = get_vote_result(data['answer'])
-            return new_data
 
-        def process_judge(data):
-            new_data = {**data['data_extra']}
-            try:
-                tmp = data['answer'].split('final<|message|>')[-1]
-                if 'true' in tmp:
-                    judge_result = True
-                else:
-                    judge_result = False
-            except:
-                judge_result = None
-            new_data['judge'] = judge_result
-            return new_data
+class InferModeHandler(BaseReasoningModeHandler):
+    @property
+    def data_name(self) -> str:
+        return 'answer_origin'
 
+    def get_prompt_data(self, num_answer: int):
+        base_data_path = self.base_data_path
+        prompt_json_paths = [os.path.join(base_data_path, self.config.get('data_info_name', 'info.jsonl'))]
+        logger.info(f'[load data from]: {prompt_json_paths}')
+        base_ds_ori = self._read_jsonl_many(prompt_json_paths)
+
+        base_ds = []
+        for c, i in enumerate(base_ds_ori):
+            i['index'] = str(i.get('index', c))
+            if len(i['index'].split('_')) == 2:
+                base_ds.append(i)
+            else:
+                for j in range(num_answer):
+                    tmp = deepcopy(i)
+                    tmp['index'] = f"{tmp['index']}_{j}"
+                    base_ds.append(tmp)
+        return base_ds
+
+    def _build_user_prompt(self, data: dict) -> str:
+        return infer_prompt(data)
+
+    @property
+    def postprocess(self):
         def process_infer(data):
             try:
                 new_data = {
@@ -195,24 +147,161 @@ reasoning: {reasoning_level}
                     'model_input': data['prompt'],
                     'model_output': data['output']['choices'][0]['text'],
                     'prompt': data['data_extra']['prompt'],
-                    'answer':  data['output']['choices'][0]['text'][len(data['prompt']):],
+                    'answer': data['output']['choices'][0]['text'][len(data['prompt']):],
                 }
-            except:
+            except Exception:
                 new_data = {
                     'info': data['data_extra'],
                     'index': data['data_extra']['index'],
                     'model_output': None,
                     'model_input': data['prompt'],
                     'prompt': data['data_extra']['prompt'],
-                    'answer':  None,
+                    'answer': None,
                 }
             return new_data
 
-        if mode == Mode.INFER:
-            return process_infer
-        if mode in [Mode.JUDGE, Mode.JUDGE_VOTE]:
-            return process_judge
-        if mode == Mode.VOTE:
-            return process_vote
-        return None
+        return process_infer
+
+
+class JudgeModeHandler(BaseReasoningModeHandler):
+    @property
+    def data_name(self) -> str:
+        return 'answer_judge'
+
+    def get_prompt_data(self, num_answer: int):
+        prompt_json_paths = self._latest_origin_jsonls()
+        logger.info(f'[load data from]: {prompt_json_paths}')
+        return self._read_jsonl_many(prompt_json_paths)
+
+    def _build_user_prompt(self, data: dict) -> str:
+        return judge_prompt(data)
+
+    @property
+    def postprocess(self):
+        def process_judge(data):
+            new_data = {**data['data_extra']}
+            try:
+                tmp = data['answer'].split('final<|message|>')[-1]
+                judge_result = True if 'true' in tmp else False
+            except Exception:
+                judge_result = None
+            new_data['judge'] = judge_result
+            return new_data
+
+        return process_judge
+
+
+class JudgeVoteModeHandler(BaseReasoningModeHandler):
+    @property
+    def data_name(self) -> str:
+        return 'answer_judge_vote'
+
+    def get_prompt_data(self, num_answer: int): 
+        base_data_path = self.base_data_path
+        prompt_json_paths = self._latest_origin_jsonls()
+        logger.info(f'[load data from]: {prompt_json_paths}')
+        base_ds_ori = self._read_jsonl_many(prompt_json_paths)
+
+        vote_info_path = sorted(
+            glob.glob(os.path.join(base_data_path, 'vote', '*', '*.jsonl'))
+        )[-1]
+        vote_info = [json.loads(i) for i in open(vote_info_path).readlines()]
+        vote_info_dict = {i['index']: i for i in vote_info}
+        base_ds = []
+        for data in base_ds_ori:
+            data['info'] = vote_info_dict[data['index'].split('_')[0]]
+            base_ds.append(data)
+        return base_ds
+
+    def _build_user_prompt(self, data: dict) -> str:
+        return judge_prompt(data, vote=True)
+
+    @property
+    def postprocess(self):
+        def process_judge(data):
+            new_data = {**data['data_extra']}
+            try:
+                tmp = data['answer'].split('final<|message|>')[-1]
+                judge_result = True if 'true' in tmp else False
+            except Exception:
+                judge_result = None
+            new_data['judge'] = judge_result
+            return new_data
+
+        return process_judge
+
+
+class VoteModeHandler(BaseReasoningModeHandler):
+    @property
+    def data_name(self) -> str:
+        return 'vote'
+
+    def get_prompt_data(self, num_answer: int):
+        prompt_json_paths = self._latest_origin_jsonls()
+        logger.info(f'[load data from]: {prompt_json_paths}')
+        base_ds_ori = self._read_jsonl_many(prompt_json_paths)
+
+        data_by_id = {}
+        for i in tqdm(base_ds_ori):
+            index = i['index']
+            prompt_index = index.split('_')[0]
+            i['info']['index'] = str(prompt_index)
+            gt = i['info']['expected_answer']
+            answer = get_last_boxed(i['model_output'])
+            if prompt_index not in data_by_id:
+                data_by_id[prompt_index] = []
+            data_by_id[prompt_index].append({'gt': gt, 'answer': answer, 'info': i['info']})
+
+        check_answer = []
+        for prompt_index, items in data_by_id.items():
+            answer = [it['answer'] for it in items]
+            check_answer.append({
+                'index': prompt_index,
+                'answer': answer,
+                'gt': items[0]['gt'],
+                'info': items[0]['info'],
+            })
+        return check_answer
+
+    def _build_user_prompt(self, data: dict) -> str:
+        return vote_prompt(data)
+
+    @property
+    def postprocess(self):
+        def process_vote(data):
+            new_data = {**data['data_extra']['info']}
+            new_data['vote'] = get_vote_result(data['answer'])
+            return new_data
+
+        return process_vote
+
+
+HANDLER_MAP = {
+    Mode.INFER: InferModeHandler,
+    Mode.JUDGE: JudgeModeHandler,
+    Mode.JUDGE_VOTE: JudgeVoteModeHandler,
+    Mode.VOTE: VoteModeHandler,
+}
+
+
+class ReasoningModeHandler(BaseReasoningModeHandler):
+    """Factory wrapper that returns a mode-specific handler instance.
+
+    Keeps constructor signature and import path stable for callers.
+    """
+
+    def __new__(cls, config: dict, mode: Mode):
+        handler_cls = HANDLER_MAP.get(mode)
+        if handler_cls is None:
+            raise ValueError(f"Unknown mode: {mode}")
+        instance = super().__new__(handler_cls)
+        # Explicitly initialize the concrete handler since __init__ won't be
+        # called automatically when returning an instance of a different class.
+        handler_cls.__init__(instance, config, mode)
+        return instance
+
+    def __init__(self, config: dict, mode: Mode): 
+        # No-op: actual init is performed in __new__ on the concrete subclass.
+        pass
+ 
     

@@ -150,6 +150,9 @@ def main(config_path, local_rank, global_size, save_file, mode):
     mode_enum = Mode.from_str(mode.lower())
     handler = ReasoningModeHandler(config, mode_enum)
     num_answer = config.get('num_answer', 8)
+    temperature = config.get('temperature', 0.8)
+    top_p = config.get('top_p', 1.0)
+    
     logger.info(config)
 
     ## save data path
@@ -181,7 +184,7 @@ def main(config_path, local_rank, global_size, save_file, mode):
         if key in finished_data_info and finished_data_info[key].get('answer', None) is not None:
             finished.append(finished_data_info[key])
             continue
-        vllm_data = handler.preprocess(data)
+        vllm_data = handler.preprocess(data, temperature, top_p)
         if count % global_size == local_rank:
             vllm_input_datas.append(vllm_data)
         count += 1
