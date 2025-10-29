@@ -31,8 +31,8 @@ VLLM_ALLOW_LONG_MAX_MODEL_LEN=1 VLLM_USE_V1=1 VLLM_WORKER_MULTIPROC_METHOD=spawn
     --bf16 True \
     --split 2024 \
     --max_model_len 32768 \
-    --temperature 0.6 \
-    --top_p 0.95 \
+    --temperature {temperature} \
+    --top_p {top_p} \
     --n 16
 
 '''
