@@ -1,7 +1,6 @@
 import os
 import glob
 import json
-from enum import Enum
 from tqdm import tqdm
 from copy import deepcopy
 
@@ -9,26 +8,12 @@ from utils.tools import get_last_boxed, get_vote_result
 from utils.prompt_func import infer_prompt, vote_prompt, judge_prompt
 from utils.logging_utils import logger
 
-
-class Mode(str, Enum):
-    """Enumeration for different reasoning modes."""
-    INFER = 'infer'
-    JUDGE = 'judge'
-    JUDGE_VOTE = 'judge_vote'
-    VOTE = 'vote'
-    
-    @classmethod
-    def from_str(cls, mode_str: str):
-        for mode in cls:
-            if mode.value == mode_str:
-                return mode
-        raise ValueError(f"Unknown ReasonMode: {mode_str}")
     
     
 class BaseReasoningModeHandler:
     """Base handler defining common IO and request-building utilities."""
 
-    def __init__(self, config: dict, mode: Mode):
+    def __init__(self, config: dict, mode: str):
         self.config = config
         self.mode = mode
         self.base_data_path = config['base_data_path']
@@ -277,30 +262,33 @@ class VoteModeHandler(BaseReasoningModeHandler):
 
 
 HANDLER_MAP = {
-    Mode.INFER: InferModeHandler,
-    Mode.JUDGE: JudgeModeHandler,
-    Mode.JUDGE_VOTE: JudgeVoteModeHandler,
-    Mode.VOTE: VoteModeHandler,
+    'infer': InferModeHandler,
+    'judge': JudgeModeHandler,
+    'judge_vote': JudgeVoteModeHandler,
+    'vote': VoteModeHandler,
 }
+
+# Public list of available modes for CLI and validation convenience
+AVAILABLE_MODES = sorted(HANDLER_MAP.keys())
 
 
 class ReasoningModeHandler(BaseReasoningModeHandler):
-    """Factory wrapper that returns a mode-specific handler instance.
-
-    Keeps constructor signature and import path stable for callers.
+    """
+    Factory wrapper that returns a mode-specific handler instance.
     """
 
-    def __new__(cls, config: dict, mode: Mode):
-        handler_cls = HANDLER_MAP.get(mode)
+    def __new__(cls, config: dict, mode: str):
+        mode_key = str(mode).lower()
+        handler_cls = HANDLER_MAP.get(mode_key)
         if handler_cls is None:
             raise ValueError(f"Unknown mode: {mode}")
         instance = super().__new__(handler_cls)
         # Explicitly initialize the concrete handler since __init__ won't be
         # called automatically when returning an instance of a different class.
-        handler_cls.__init__(instance, config, mode)
+        handler_cls.__init__(instance, config, mode_key)
         return instance
 
-    def __init__(self, config: dict, mode: Mode): 
+    def __init__(self, config: dict, mode: str): 
         # No-op: actual init is performed in __new__ on the concrete subclass.
         pass
  

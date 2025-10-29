@@ -16,7 +16,7 @@ import threading
 import queue
 import jsonlines
 from utils.tools import until_servers_up
-from utils.mode_handler import ReasoningModeHandler, Mode
+from utils.mode_handler import ReasoningModeHandler, AVAILABLE_MODES
 from utils.logging_utils import logger
 
 class vllm_infer():
@@ -129,7 +129,7 @@ class vllm_infer():
 
 @click.command()
 @click.option('-c', '--config-path', default='config/oss.yaml', help='Path to the configuration YAML file.')
-@click.option('-m', '--mode', default=None, type=click.Choice([m.value for m in Mode], case_sensitive=False))
+@click.option('-m', '--mode', default=None, type=click.Choice(AVAILABLE_MODES, case_sensitive=False))
 @click.option('-l', '--local_rank', default=0)
 @click.option('-g', '--global_size', default=1)
 @click.option('-s', '--save_file', default=None)
@@ -144,11 +144,10 @@ def main(config_path, local_rank, global_size, save_file, mode):
     
     base_data_path = config['base_data_path']
     if mode is None:
-        mode = str(config.get('mode', Mode.INFER.value))
+        mode = str(config.get('mode', 'infer'))
     else:
         config['mode'] = mode
-    mode_enum = Mode.from_str(mode.lower())
-    handler = ReasoningModeHandler(config, mode_enum)
+    handler = ReasoningModeHandler(config, mode)
     num_answer = config.get('num_answer', 8)
     temperature = config.get('temperature', 0.8)
     top_p = config.get('top_p', 1.0)
