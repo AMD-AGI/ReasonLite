@@ -1,0 +1,11 @@
+loguru==0.7.3
+jsonlines
+math-verify[antlr4_11_0]==0.7.0
+fire
+deepspeed
+tensorboardX
+prettytable
+datasets
+langdetect==1.0.9
+pebble==5.1.0
+word2number

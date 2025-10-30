@@ -2,6 +2,12 @@
 
 ## Data Generation Pipeline 
 
+### Setup environment
+
+```
+pip install -r requirements.txt
+```
+
 ### Start vllm Server
 
 ```
@@ -137,11 +143,30 @@ WIP
 
 ## Evaluate checkpoints 
 
-Evaluate distilled checkpoints on AIME24 benchmark
+See the following example for evaluating distilled checkpoints on AIME24 benchmark
 
 ```
 cd eval
-python eval_ckpts.py -c config/example.yaml
+export CUDA_VISIBLE_DEVICES=0
+
+export VLLM_ROCM_USE_AITER=1
+export VLLM_USE_AITER_UNIFIED_ATTENTION=1
+export VLLM_ROCM_USE_AITER_MHA=0
+
+VLLM_ALLOW_LONG_MAX_MODEL_LEN=1 VLLM_USE_V1=1 VLLM_WORKER_MULTIPROC_METHOD=spawn python3 uni_eval.py \
+    --base_model <path_to_check_point> \
+    --chat_template_name default \
+    --system_prompt_name disabled \
+    --output_dir results \
+    --tensor_parallel_size 1 \
+    --data_id zwhe99/aime90 \
+    --bf16 True \
+    --split 2024 \
+    --max_model_len 32768 \
+    --temperature 0.8 \
+    --top_p 1.0 \
+    --n 16
+
 ```
 
 
