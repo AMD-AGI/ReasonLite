@@ -17,6 +17,7 @@ class BaseReasoningModeHandler:
         self.config = config
         self.mode = mode
         self.base_data_path = config['base_data_path']
+        self.use_gpt_oss = "gpt-oss" in config['model_path'].lower()
 
     @property
     def data_name(self) -> str:
@@ -54,8 +55,7 @@ class BaseReasoningModeHandler:
         return latest_ds
 
     # build request
-    def _wrap_prompt(self, prompt: str) -> str:
-        reasoning_level = self.config.get('reasoning_level', 'medium')
+    def _wrap_gpt_oss_system_prompt(self, prompt: str, reasoning_level) -> str:
         return (
             f"""<|start|>system<|message|>You are ChatGPT, a large language model trained by OpenAI.
 Knowledge cutoff: 2024-06
@@ -71,7 +71,11 @@ reasoning: {reasoning_level}
     def preprocess(self, data: dict, temperature: float, top_p: float) -> dict:
         """Subclass should prepare the user-visible prompt. This wraps and builds vLLM input."""
         user_prompt = self._build_user_prompt(data)
-        text = self._wrap_prompt(user_prompt)
+        if self.use_gpt_oss:  # warp user prompt with system prompt for gpt-oss
+            reasoning_level = self.config.get('reasoning_level', 'medium')
+            text = self._wrap_gpt_oss_system_prompt(user_prompt, reasoning_level)
+        else:  # no system prompt wrapping
+            text = user_prompt
         vllm_data = {
             'prompt': text,
             'echo': True,
