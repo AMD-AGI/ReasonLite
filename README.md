@@ -62,8 +62,8 @@ datas/<experiment>/
 	info.jsonl                        # input prompts
 	answer_origin/<timestamp>/0_1.jsonl      # raw generations
 	answer_judge/<timestamp>/0_1.jsonl       # generations + correctness flag
-	vote/<timestamp>/0_1.jsonl               # aggregated votes by prompt
-	answer_judge_vote/<timestamp>/0_1.jsonl  # judged generations with embedded votes
+	vote/<timestamp>/0_1.jsonl               # majority votes by prompt
+	answer_judge_vote/<timestamp>/0_1.jsonl  # judged generations with majority votes
 ```
 
 Notes
@@ -87,7 +87,7 @@ Raw model generations with trace:
 {"info": {"prompt": "...", "expected_answer": "9375", "difficulty": "7/8", "index": "pol:0_3"},
  "index": "pol:0_3",
  "model_input": "<full chat input ...>",
- "model_output": "<full chat output ...>",
+ "model_output": "<full chat output with input prepended...>",
  "prompt": "The front tires of a car wear out after 25,000 km, ...",
  "answer": "Swap after 9,375 km."}
 ```
@@ -120,7 +120,7 @@ Per-prompt aggregated votes (no trace):
 
 ### Output: `answer_judge_vote/<timestamp>/0_1.jsonl`
 
-Judged generations with embedded upstream vote tallies and label source:
+Judged generations with generated pseudo labels genreated by majority vote:
 
 ```jsonl
 {"info": {"prompt": "The largest three-digit number ...",
