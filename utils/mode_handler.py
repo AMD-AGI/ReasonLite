@@ -3,6 +3,7 @@ import glob
 import json
 from tqdm import tqdm
 from copy import deepcopy
+from transformers import AutoTokenizer
 
 from utils.tools import get_last_boxed, get_vote_result
 from utils.prompt_func import infer_prompt, vote_prompt, judge_prompt
@@ -18,6 +19,8 @@ class BaseReasoningModeHandler:
         self.mode = mode
         self.base_data_path = config['base_data_path']
         self.use_gpt_oss = "gpt-oss" in config['model_path'].lower()
+        # Lazy-initialized tokenizer for non-gpt-oss models to format chat prompts
+        self._hf_tokenizer = None
 
     @property
     def data_name(self) -> str:
@@ -74,8 +77,8 @@ reasoning: {reasoning_level}
         if self.use_gpt_oss:  # warp user prompt with system prompt for gpt-oss
             reasoning_level = self.config.get('reasoning_level', 'medium')
             text = self._wrap_gpt_oss_system_prompt(user_prompt, reasoning_level)
-        else:  # no system prompt wrapping
-            text = user_prompt
+        else:  # for non-gpt-oss models, wrap with tokenizer chat template
+            text = self._apply_hf_chat_template(user_prompt)
         vllm_data = {
             'prompt': text,
             'echo': True,
@@ -98,6 +101,28 @@ reasoning: {reasoning_level}
     @property
     def postprocess(self):
         raise NotImplementedError
+
+    # --- internal helpers for non-gpt-oss chat formatting ---
+    def _apply_hf_chat_template(self, user_prompt: str) -> str:
+        # Try to use the model's own chat template via transformers AutoTokenizer
+        try:
+            self._hf_tokenizer = AutoTokenizer.from_pretrained(self.config['model_path'], trust_remote_code=True, use_fast=False)
+        except Exception as e:
+            logger.warning(f"Failed to load tokenizer for chat template: {e}; using fallback.")
+            return self._fallback_chat_wrap(user_prompt)
+        messages = [{'role': 'user', 'content': user_prompt}]
+        return self._hf_tokenizer.apply_chat_template(
+            messages,
+            add_generation_prompt=True,
+            tokenize=False,
+        )
+        
+    def _fallback_chat_wrap(self, user_prompt: str) -> str:
+        return (
+            "User\n"
+            f"{user_prompt}"
+            "\nAssistant\n"
+        )
 
 
 class InferModeHandler(BaseReasoningModeHandler):
@@ -265,17 +290,6 @@ class VoteModeHandler(BaseReasoningModeHandler):
         return process_vote
 
 
-HANDLER_MAP = {
-    'infer': InferModeHandler,
-    'judge': JudgeModeHandler,
-    'judge_vote': JudgeVoteModeHandler,
-    'vote': VoteModeHandler,
-}
-
-# Public list of available modes for CLI and validation convenience
-AVAILABLE_MODES = sorted(HANDLER_MAP.keys())
-
-
 class ReasoningModeHandler(BaseReasoningModeHandler):
     """
     Factory wrapper that returns a mode-specific handler instance.
@@ -296,4 +310,13 @@ class ReasoningModeHandler(BaseReasoningModeHandler):
         # No-op: actual init is performed in __new__ on the concrete subclass.
         pass
  
-    
+HANDLER_MAP = {
+    'infer': InferModeHandler,
+    'judge': JudgeModeHandler,
+    'judge_vote': JudgeVoteModeHandler,
+    'vote': VoteModeHandler,
+}
+
+# Public list of available modes
+AVAILABLE_MODES = list(HANDLER_MAP.keys())
+
