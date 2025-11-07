@@ -17,7 +17,7 @@ python -m vllm.entrypoints.openai.api_server \
     --compilation-config '{{"full_cuda_graph": true}}' \
     --gpu-memory-utilization {gpu} \
     --model {model_path} \
-    --max_model_len 131072 \
+    --max_model_len 32768 \
     --port {port} \
     --seed {port} \
     -tp {tp} \

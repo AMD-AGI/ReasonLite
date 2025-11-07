@@ -1,5 +1,5 @@
 # gpu info
-model_path: /home/Chushi.Chen@amd.com/dev/models/models--openai--gpt-oss-120b/snapshots/4c0fa49a43c232dc2a1cae033ae1fb7961cf8220
+model_path: openai/gpt-oss-120b
 gpu_index: [0,1,2,3,4,5,6,7]
 batch_size: 2000
 gpu: 0.95
@@ -9,8 +9,11 @@ tp: 1
 mode: infer
 
 # data
+wait_servers_up: true
 base_data_path: 'datas/example'
 data_info_name: 'info.jsonl'
 num_answer: 32
 reasoning_level: medium
 max_tokens: 30000
+temperature: 0.8
+top_p: 1.0
