@@ -1,5 +1,5 @@
 # gpu info
-model_path: /home/Chushi.Chen@amd.com/dev/models/models--openai--gpt-oss-120b/snapshots/4c0fa49a43c232dc2a1cae033ae1fb7961cf8220
+model_path: openai/gpt-oss-120b
 gpu_index: [0,1,2,3,4,5,6,7]
 batch_size: 2000
 gpu: 0.95

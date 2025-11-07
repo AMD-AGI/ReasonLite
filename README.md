@@ -33,13 +33,13 @@ python3 infer.py -c config/oss.yaml -m judge
 
 ### Pseudo Label
 
-**Obtain pseudo-labels through voting**, note you will need run through `jduge` first to get pseudo labels.
+**Obtain pseudo-labels through voting**
 
 ```
 python3 infer.py -c config/oss.yaml -m vote
 ```
 
-**Judge the correctness of results using pseudo-labels**. Similarly, running through `vote` is a pre-requisite for this step.
+**Judge the correctness of results using pseudo-labels**. Running through `vote` is a pre-requisite for this step.
 
 ```
 python3 infer.py -c config/oss.yaml -m judge_vote
@@ -57,15 +57,24 @@ python3 utils/saving_to_training_format.py -d path/to/judged/data.jsonl
 
 This repo reads a simple JSONL input and produces several JSONL outputs under a timestamped folder. Below is the on-disk layout and minimal examples.
 
-### Folder layout
+### Expriment Directory Layout
 
 ```
-datas/<experiment>/
-	info.jsonl                               # input prompts
-	answer_origin/<timestamp>/0_1.jsonl      # raw generations
-	answer_judge/<timestamp>/0_1.jsonl       # generations + correctness flag
-	vote/<timestamp>/0_1.jsonl               # majority votes by prompt
-	answer_judge_vote/<timestamp>/0_1.jsonl  # judged generations with majority votes
+datas/
+└── <experiment_name>/
+    ├── info.jsonl           # input prompts
+    ├── answer_origin/       # folder for raw generations
+    │   └── <timestamp>/
+    │       └── 0_1.jsonl
+    ├── answer_judge/        # generations w/ correctness flag
+    │   └── <timestamp>/
+    │       └── 0_1.jsonl
+    ├── vote/                # majority votes by prompt
+    │   └── <timestamp>/
+    │       └── 0_1.jsonl
+    └── answer_judge_vote/   # judged generations with majority votes
+        └── <timestamp>/
+            └── 0_1.jsonl
 ```
 
 Notes
@@ -190,29 +199,11 @@ Judged generations with generated pseudo labels genreated by majority vote:
 
 ## Evaluate checkpoints 
 
-See the following example for evaluating distilled checkpoints on AIME24 benchmark
+See the following example for evaluating distilled checkpoints on AIME24 benchmark, you can manually modify parameters inside `eval.sh`.
 
 ```bash
 cd eval
-export CUDA_VISIBLE_DEVICES=0
-
-export VLLM_ROCM_USE_AITER=1
-export VLLM_USE_AITER_UNIFIED_ATTENTION=1
-export VLLM_ROCM_USE_AITER_MHA=0
-
-VLLM_ALLOW_LONG_MAX_MODEL_LEN=1 VLLM_USE_V1=1 VLLM_WORKER_MULTIPROC_METHOD=spawn python3 uni_eval.py \
-    --base_model <path_to_checkpoint> \
-    --chat_template_name default \
-    --system_prompt_name disabled \
-    --output_dir results \
-    --tensor_parallel_size 1 \
-    --data_id zwhe99/aime90 \
-    --bf16 True \
-    --split 2024 \
-    --max_model_len 32768 \
-    --temperature 0.8 \
-    --top_p 1.0 \
-    --n 16
+sh eval.sh
 
 ```
 
