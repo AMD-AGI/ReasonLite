@@ -1,0 +1,50 @@
+- base_model:
+  - Qwen/Qwen3-0.6B
+  - Qwen/Qwen3-1.7B
+  - Qwen/Qwen3-4B
+  - Qwen/Qwen3-8B
+  - Qwen/Qwen3-14B
+  - Qwen/Qwen2.5-1.5B-Instruct
+  - Qwen/Qwen2.5-3B-Instruct
+  - Qwen/Qwen2.5-7B-Instruct
+  - Qwen/Qwen2.5-14B-Instruct
+  - deepseek-ai/DeepSeek-R1-Distill-Qwen-1.5B
+  - deepseek-ai/DeepSeek-R1-Distill-Qwen-7B
+  - deepseek-ai/DeepSeek-R1-Distill-Qwen-14B
+  chat_template_name: default
+  system_prompt_name: disabled 
+  tensor_parallel_size: 1
+  data_id:
+  - zwhe99/aime90 
+  bf16: True 
+  temperature: 0.6
+  top_p: 0.95
+  n: 16
+
+- base_model:
+  - nvidia/OpenMath-Nemotron-1.5B
+  - agentica-org/DeepScaleR-1.5B-Preview
+  chat_template_name: default
+  system_prompt_name: simplerl
+  tensor_parallel_size: 1
+  data_id:
+  - zwhe99/aime90 
+  bf16: True 
+  temperature: 0.6
+  top_p: 0.95
+  n: 16
+
+- base_model:
+  - POLARIS-Project/Polaris-1.7B-Preview
+  chat_template_name: default
+  system_prompt_name: simplerl
+  tensor_parallel_size: 1
+  data_id:
+  - zwhe99/aime90 
+  bf16: True 
+  max_model_len: 90000
+  temperature:
+  - 1.4
+  top_p: 0.95
+  n: 16
+

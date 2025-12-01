@@ -1,0 +1,86 @@
+# MIT License
+#
+# Copyright (c) 2025 AMD-AGI
+#
+# Permission is hereby granted, free of charge, to any person obtaining a copy
+# of this software and associated documentation files (the "Software"), to deal
+# in the Software without restriction, including without limitation the rights
+# to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+# copies of the Software, and to permit persons to whom the Software is
+# furnished to do so, subject to the following conditions:
+#
+# The above copyright notice and this permission notice shall be included in all
+# copies or substantial portions of the Software.
+#
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+# OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+# SOFTWARE.
+
+
+import json
+import jsonlines
+import os
+import numpy as np
+import click
+
+data_paths = [
+    # 'datas/example/answer_judge_vote/20251009_083232/0_1.jsonl',
+    # 'datas/example/answer_judge/20251011_023548/0_1.jsonl',
+    # 'datas/s2v3_medium16_medium/answer_judge/20251015_061327/0_1.jsonl'
+]
+
+@click.command()
+@click.option('-d', '--data_path', required=True, type=str, help='Path to the data file. Make sure it is the judged data.')
+def convert_and_save(data_path: str):
+    data = [json.loads(i) for i in open(data_path).readlines()]
+    
+    save_path = data_path.split('/answer_judge')[0] + '/format_data'
+    os.makedirs(save_path, exist_ok=True)
+
+    print(f'[load]: {data_path}\n[save]: {save_path}')
+
+    out = []
+    acc = []
+    for i in data:
+        judge = i['judge']
+        if judge is None:
+            acc.append(-1)
+            continue
+        elif judge is False:
+            acc.append(0)
+            continue
+        model_output = i['model_output']
+        if len(model_output.split('<|start|>assistant<|channel|>')) != 3:
+            acc.append(-2)
+            continue
+        acc.append(1)
+        answer = model_output.split('<|end|><|start|>assistant<|channel|>analysis<|message|>')[1]
+        answer = "<think>\n" + answer.replace('<|end|><|start|>assistant<|channel|>final<|message|>',  '\n</think>')
+        prompt = i['model_input'].split('<|start|>user<|message|>')[1].split('<|end|>')[0].strip()
+        out.append({"messages": [{"role": "user", "content": prompt},  {"role": "assistant", "content": answer}]})
+
+    print(f'[total data]: {len(data)}')
+    print(f'[keeped data]: {len(out)}')
+    print(f'[format mismatch ratio]: {float((np.array(acc) == -2).mean())}')
+    print(f'[error ratio]: {float((np.array(acc) == -1).mean())}')
+    print(f'[wrong ratio]: {float((np.array(acc) == 0).mean())}')
+    print(f'[correct ratio]: {float((np.array(acc) == 1).mean())}')
+
+
+    chunk_size = 100000
+    num_chunks = (len(out) + chunk_size - 1) // chunk_size
+    np.random.shuffle(out)
+
+    for i in range(num_chunks):
+        chunk = out[i*chunk_size:(i+1)*chunk_size]
+        save_path_tmp = os.path.join(save_path, f"data_part{i+1}.jsonl")
+        print(f"Saving {len(chunk)} records to {save_path_tmp}")
+        with jsonlines.open(save_path_tmp, mode='w') as writer:
+            writer.write_all(chunk)
+
+if __name__ == "__main__":
+    convert_and_save()

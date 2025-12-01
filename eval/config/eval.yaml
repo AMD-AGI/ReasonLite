@@ -1,0 +1,24 @@
+- base_model:
+  - amd/ReasonLite-0.6B-Turbo
+  chat_template_name: default
+  system_prompt_name: disabled 
+  tensor_parallel_size: 1
+  data_id:
+  - zwhe99/aime90 # AIME24
+  bf16: True 
+  temperature: 0.6
+  top_p: 0.95
+  n: 16
+
+- base_model:
+  - amd/ReasonLite-0.6B
+  chat_template_name: default
+  system_prompt_name: disabled 
+  tensor_parallel_size: 1
+  data_id:
+  - zwhe99/aime90 # AIME24
+  bf16: True 
+  max_model_len: 65536
+  temperature: 1
+  top_p: 0.98
+  n: 16
