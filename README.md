@@ -5,7 +5,7 @@
 
 ## Introduction
 
-* **ReasonLite** is an ultra-lightweight math reasoning model. With only 0.6B parameters, it leverages high-quality data distillation to achieve performance comparable to models over 10× its size, such as Qwen3-8B, **reaching 75.2 on AIME24 and extending the scaling law of small models.**
+* **ReasonLite is an ultra-lightweight math reasoning model.** With only 0.6B parameters, it leverages **high-quality data distillation** to achieve performance comparable to models over 10× its size, such as Qwen3-8B, **reaching 75.2 on AIME24 and extending the scaling law of small models.**
 * The project is fully open-source, including **model weights**, **training scripts**, **training data**, and the **data synthesis + filtering pipeline**.
 
 <p align="center">
@@ -241,7 +241,7 @@ follow this format:
   title    = {ReasonLite: An Ultra-Lightweight 0.6B Reasoning Model},
   author   = {An, Zihao and Chen, Chushi and Liu, Ziqiong and Li, Dong and Barsoum, Emad},
   year     = {2025},
-  url      = {https://github.com/amd/ReasonLite},
+  url      = {https://github.com/AMD-AGI/ReasonLite},
   note     = {Open-source project}
 }
 ```
