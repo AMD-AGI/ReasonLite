@@ -15,8 +15,8 @@
 ## Model
 
 The model is trained in **two progressive distillation stages**.
-First, short-CoT data is used to distill **Qwen3-0.6B** into **AMD-0.6B-Turbo**, improving **AIME24 accuracy from 11.0 → 57.1**.
-Then, long-CoT data is used to obtain **AMD-0.6B**, further boosting accuracy to **75.2**.
+First, short-CoT data is used to distill **Qwen3-0.6B** into **ReasonLite-0.6B-Turbo**, improving **AIME24 accuracy from 11.0 → 57.1**.
+Then, long-CoT data is used to obtain **ReasonLite-0.6B**, further boosting accuracy to **75.2**.
 
 <p align="center">
   <img src="img/img_model.png" alt="ReasonLite" height="500">
