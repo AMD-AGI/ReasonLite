@@ -53,7 +53,7 @@ Then, long-CoT data is used to obtain **AMD-0.6B**, further boosting accuracy to
 
 ## Dataset
 
-* A total of **343K math problems** originated from [Polaris](https://huggingface.co/datasets/POLARIS-Project/Polaris-Dataset-53K) and [OpenMathReasoni](https://huggingface.co/datasets/nvidia/ngOpenMathReasoni).
+* A total of **343K math problems** originated from [Polaris](https://huggingface.co/datasets/POLARIS-Project/Polaris-Dataset-53K) and [OpenMathReasoning](https://huggingface.co/datasets/nvidia/OpenMathReasoning).
 * Using the **GPT-OSS** model as the teacher, **9.1M** model-generated raw answers were collected under both medium and high reasoning modes.
 * Pseudo-labels are created by majority voting over the model outputs.
 * Finally, **6.1M samples** were retained, including **4.3M medium-level** and **1.8M high-level** reasoning data.
