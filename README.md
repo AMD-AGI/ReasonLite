@@ -2,6 +2,13 @@
   <img src="img/img_logo.png" alt="ReasonLite" width="200">
 </p>
 
+<p align="center">
+<a href="https://github.com/AMD-AGI/ReasonLite"><b>GitHub</b></a> |
+<a href="https://huggingface.co/amd/ReasonLite-0.6B"><b>Model</b></a> |
+<a href="https://huggingface.co/datasets/amd/ReasonLite-Dataset"><b>Dataset</b></a> |
+<a href="https://www.amd.com/en/developer/resources/technical-articles/2026/introducing-reasonlite-0-6b.html"><b>Blog</b></a> 
+
+</p>
 
 ## Introduction
 
